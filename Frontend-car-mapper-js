@@ -1,0 +1,416 @@
+frontend\js\front-js-fetch\cars\car-mapper.js
+/*==================================================
+    CAR MAPPER
+
+    Responsible for:
+    - Mapping backend car payloads to frontend car models
+    - Building public image URLs
+    - Normalizing stored image paths
+    - Preserving existing absolute image URLs
+
+    IMPORTANT STORAGE CONTRACT:
+    Backend stores image paths relative to:
+
+        backend/uploads/
+
+    Example DB value:
+
+        cars/133/main-images/main_image/image-xxxx.jpeg
+
+    Public URL must therefore be:
+
+        http://localhost:3001/uploads/cars/133/main-images/main_image/image-xxxx.jpeg
+
+    This mapper is the single frontend boundary responsible
+    for converting storage paths into public image URLs.
+==================================================*/
+
+(function (window) {
+
+    'use strict';
+
+    /*==================================================
+        DEPENDENCIES
+    ==================================================*/
+
+    const CONFIG = window.FRONTEND_CONFIG;
+
+    if (!CONFIG) {
+        console.error(
+            '[CarMapper] FRONTEND_CONFIG is not available.'
+        );
+        return;
+    }
+
+    if (!CONFIG.API) {
+        console.error(
+            '[CarMapper] FRONTEND_CONFIG.API is not available.'
+        );
+        return;
+    }
+
+    /*==================================================
+        INTERNAL HELPERS
+    ==================================================*/
+
+    /**
+     * Normalize a locally stored image path and convert it
+     * into a public /uploads URL.
+     *
+     * Supported input formats:
+     *
+     * 1. Relative storage path:
+     *    cars/133/main-images/main_image/image.jpeg
+     *
+     * 2. Leading slash:
+     *    /cars/133/main-images/main_image/image.jpeg
+     *
+     * 3. Already prefixed:
+     *    /uploads/cars/133/main-images/main_image/image.jpeg
+     *
+     * 4. Without leading slash:
+     *    uploads/cars/133/main-images/main_image/image.jpeg
+     *
+     * 5. Absolute URL:
+     *    http://localhost:3001/uploads/...
+     *
+     * Absolute URLs are preserved.
+     */
+    function buildImageUrl(imagePath) {
+
+        if (
+            imagePath === null ||
+            imagePath === undefined
+        ) {
+            return '';
+        }
+
+        if (
+            typeof imagePath !== 'string'
+        ) {
+            return '';
+        }
+
+        let normalizedPath = imagePath.trim();
+
+        if (!normalizedPath) {
+            return '';
+        }
+
+        /*----------------------------------------------
+            Absolute HTTP / HTTPS URL
+        ----------------------------------------------*/
+
+        if (/^https?:\/\//i.test(normalizedPath)) {
+            return normalizedPath;
+        }
+
+        /*----------------------------------------------
+            Normalize Windows-style separators
+        ----------------------------------------------*/
+
+        normalizedPath = normalizedPath.replace(/\\/g, '/');
+
+        /*----------------------------------------------
+            Remove leading slashes
+
+            /uploads/cars/...
+                ↓
+            uploads/cars/...
+
+            /cars/...
+                ↓
+            cars/...
+        ----------------------------------------------*/
+
+        normalizedPath = normalizedPath.replace(/^\/+/, '');
+
+        /*----------------------------------------------
+            Remove duplicated uploads prefix
+
+            uploads/cars/...
+                ↓
+            cars/...
+
+            This also makes old stored values such as
+            /uploads/cars/... backward compatible.
+        ----------------------------------------------*/
+
+        if (
+            normalizedPath
+                .toLowerCase()
+                .startsWith('uploads/')
+        ) {
+            normalizedPath = normalizedPath.substring(
+                'uploads/'.length
+            );
+        }
+
+        /*----------------------------------------------
+            Public uploads base URL
+        ----------------------------------------------*/
+
+        const uploadsUrl =
+            CONFIG.API.UPLOADS_URL;
+
+        if (
+            !uploadsUrl ||
+            typeof uploadsUrl !== 'string'
+        ) {
+            console.error(
+                '[CarMapper] CONFIG.API.UPLOADS_URL is not configured.'
+            );
+
+            return '';
+        }
+
+        /*----------------------------------------------
+            Prevent double slash
+        ----------------------------------------------*/
+
+        const normalizedUploadsUrl =
+            uploadsUrl.replace(/\/+$/, '');
+
+        /*----------------------------------------------
+            Final public URL
+        ----------------------------------------------*/
+
+        return `${normalizedUploadsUrl}/${normalizedPath}`;
+    }
+
+    /**
+     * Safely read a value from a car object.
+     */
+    function readValue(car, key, fallback) {
+
+        if (
+            !car ||
+            typeof car !== 'object'
+        ) {
+            return fallback;
+        }
+
+        if (
+            car[key] === null ||
+            car[key] === undefined
+        ) {
+            return fallback;
+        }
+
+        return car[key];
+    }
+
+    /*==================================================
+        CAR MAPPING
+    ==================================================*/
+
+    function map(car) {
+
+        if (
+            !car ||
+            typeof car !== 'object'
+        ) {
+            return null;
+        }
+
+        /*----------------------------------------------
+            Raw image storage paths
+        ----------------------------------------------*/
+
+        const mainImage =
+            readValue(car, 'main_image', '');
+
+        const backgroundImage =
+            readValue(car, 'background_image', '');
+
+        /*----------------------------------------------
+            Frontend car model
+        ----------------------------------------------*/
+
+        return {
+
+            /*------------------------------------------
+                Identity
+            ------------------------------------------*/
+
+            id:
+                readValue(car, 'id', null),
+
+            slug:
+                readValue(car, 'slug', ''),
+
+            /*------------------------------------------
+                Basic vehicle information
+            ------------------------------------------*/
+
+            title:
+                readValue(
+                    car,
+                    'title',
+                    readValue(car, 'name', '')
+                ),
+
+            name:
+                readValue(car, 'name', ''),
+
+            brand:
+                readValue(car, 'brand_name', ''),
+
+            brandName:
+                readValue(car, 'brand_name', ''),
+
+            model:
+                readValue(car, 'model', ''),
+
+            year:
+                readValue(car, 'year', null),
+
+            price:
+                readValue(car, 'price', null),
+
+            /*------------------------------------------
+                Vehicle specifications
+            ------------------------------------------*/
+
+            mileage:
+                readValue(car, 'mileage', null),
+
+            fuelType:
+                readValue(car, 'fuel_type', ''),
+
+            transmission:
+                readValue(car, 'transmission', ''),
+
+            bodyType:
+                readValue(car, 'body_type', ''),
+
+            color:
+                readValue(car, 'color', ''),
+
+            /*------------------------------------------
+                Status
+            ------------------------------------------*/
+
+            status:
+                readValue(car, 'status', ''),
+
+            isActive:
+                readValue(car, 'is_active', null),
+
+            isPublished:
+                readValue(car, 'is_published', null),
+
+            /*------------------------------------------
+                Display Location
+            ------------------------------------------*/
+
+            sectionId:
+                readValue(car, 'section_id', null),
+
+            sectionName:
+                readValue(car, 'section_name', ''),
+
+            sectionSlug:
+                readValue(car, 'section_slug', ''),
+
+            sortOrder:
+                readValue(
+                    car,
+                    'sort_order',
+                    null
+                ),
+
+            /*------------------------------------------
+                Images
+
+                cover:
+                    Main vehicle image
+
+                background:
+                    Vehicle background image
+            ------------------------------------------*/
+
+            cover:
+                buildImageUrl(mainImage),
+
+            background:
+                buildImageUrl(backgroundImage),
+
+            /*------------------------------------------
+                Original storage values
+
+                Kept available for debugging / future
+                consumers without changing the public
+                image URL contract.
+            ------------------------------------------*/
+
+            mainImage:
+                mainImage,
+
+            backgroundImage:
+                backgroundImage,
+
+            /*------------------------------------------
+                Frontend product URL
+            ------------------------------------------*/
+
+            productUrl:
+                readValue(car, 'product_url', ''),
+
+            /*------------------------------------------
+                Preserve useful backend fields
+
+                This avoids unnecessarily destroying data
+                returned by the public API.
+            ------------------------------------------*/
+
+            createdAt:
+                readValue(car, 'created_at', null),
+
+            updatedAt:
+                readValue(car, 'updated_at', null),
+
+            publishedAt:
+                readValue(car, 'published_at', null)
+
+        };
+    }
+
+    /*==================================================
+        LIST MAPPING
+    ==================================================*/
+
+    function mapList(cars) {
+
+        if (!Array.isArray(cars)) {
+            return [];
+        }
+
+        return cars
+            .map(map)
+            .filter(Boolean);
+    }
+
+    /*==================================================
+        PUBLIC API
+    ==================================================*/
+
+    window.CarMapper = {
+
+        map: map,
+
+        mapList: mapList,
+
+        buildImageUrl: buildImageUrl
+
+    };
+
+    /*==================================================
+        READY
+    ==================================================*/
+
+    console.log(
+        '[CarMapper] initialized.'
+    );
+
+})(window);
