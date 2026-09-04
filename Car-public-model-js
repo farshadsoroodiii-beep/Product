@@ -1,0 +1,542 @@
+backend\models\cars\public\car-public.model.js
+/*==================================================
+CAR PUBLIC MODEL
+
+Vehicle Business Management System
+
+Responsibilities:
+- Public Cars List
+- Public Cars By Site Section
+- Public Product Details
+- Admin Details
+
+IMPORTANT:
+- Public Product has its own explicit query.
+- Product does NOT use CarQuery.getBySlug().
+- Product does NOT use Admin Details.
+- Only active cars are publicly accessible.
+- Main Image and Background Image belong to
+  the cars table.
+- Gallery belongs to car_gallery.
+- Gallery order is controlled by sort_order.
+
+==================================================*/
+
+'use strict';
+
+const BaseModel =
+require('../../base.model');
+
+class CarPublic extends BaseModel {
+
+/*==============================================
+    GET ACTIVE CARS
+
+    PUBLIC CAR LIST
+==============================================*/
+
+static async getActive() {
+
+    const sql = `
+
+        SELECT
+
+            c.id,
+
+            c.brand_id,
+
+            b.name AS brand_name,
+
+            c.model,
+            c.trim,
+            c.display_title,
+
+            c.car_code,
+            c.slug,
+
+            c.condition,
+            c.status,
+
+            c.year,
+
+            c.color,
+            c.gearbox,
+            c.fuel,
+
+            c.mileage,
+
+            c.price,
+            c.old_price,
+
+            c.currency,
+            c.price_status,
+
+            c.main_image,
+            c.background_image,
+
+            c.manufacturer_url,
+
+            c.is_active,
+            c.published_at
+
+        FROM cars c
+
+        INNER JOIN brands b
+            ON b.id = c.brand_id
+
+        WHERE
+            c.is_active = 1
+
+        ORDER BY
+
+            c.published_at DESC,
+            c.created_at DESC
+
+    `;
+
+    return this.findAll(sql);
+
+}
+
+/*==============================================
+    GET CARS BY SITE SECTION SLUG
+
+    PUBLIC DISPLAY
+==============================================*/
+
+static async getBySectionSlug(slug) {
+
+    const sql = `
+
+        SELECT
+
+            c.id,
+
+            c.brand_id,
+
+            b.name AS brand_name,
+
+            c.model,
+            c.trim,
+            c.display_title,
+
+            c.slug,
+
+            c.condition,
+            c.status,
+
+            c.year,
+
+            c.color,
+            c.gearbox,
+            c.fuel,
+
+            c.mileage,
+
+            c.price,
+            c.old_price,
+
+            c.currency,
+            c.price_status,
+
+            c.main_image,
+            c.background_image,
+
+            c.manufacturer_url,
+
+            c.is_active,
+            c.published_at,
+
+            ss.id AS section_id,
+            ss.name AS section_name,
+            ss.slug AS section_slug,
+
+            cdl.sort_order
+
+        FROM cars c
+
+        INNER JOIN brands b
+            ON b.id = c.brand_id
+
+        INNER JOIN car_display_locations cdl
+            ON cdl.car_id = c.id
+
+        INNER JOIN site_sections ss
+            ON ss.id = cdl.section_id
+
+        WHERE
+
+            c.is_active = 1
+
+            AND ss.is_active = 1
+
+            AND ss.slug = ?
+
+        ORDER BY
+
+            cdl.sort_order ASC,
+            c.published_at DESC,
+            c.created_at DESC
+
+    `;
+
+    return this.findAll(
+        sql,
+        [slug]
+    );
+
+}
+
+/*==============================================
+    GET PRODUCT BY SLUG
+
+    PUBLIC PRODUCT DETAILS
+
+    Endpoint:
+
+        GET /api/cars/:slug
+
+    Returns:
+
+    - Complete public car information
+    - Brand information
+    - Main Image
+    - Background Image
+    - SEO metadata
+    - Manufacturer URL
+    - Published information
+    - Persisted Gallery
+
+    IMPORTANT:
+
+    Main Image:
+        cars.main_image
+
+    Background Image:
+        cars.background_image
+
+    Gallery:
+        car_gallery
+
+    Gallery ordering:
+
+        sort_order ASC,
+        id ASC
+
+    Main Image is NOT converted into a
+    Gallery record.
+
+    Display Locations are NOT returned here.
+
+    Temporary images are NOT returned.
+==============================================*/
+
+static async getProductBySlug(slug) {
+
+    /*==========================================
+        VALIDATE SLUG
+    ==========================================*/
+
+    if (
+        typeof slug !== 'string' ||
+        !slug.trim()
+    ) {
+
+        return null;
+
+    }
+
+    const normalizedSlug =
+        slug.trim();
+
+    /*==========================================
+        PRODUCT CAR QUERY
+    ==========================================*/
+
+    const carSql = `
+
+        SELECT
+
+            c.id,
+
+            c.brand_id,
+
+            b.name AS brand_name,
+            b.slug AS brand_slug,
+            b.logo AS brand_logo,
+            b.country AS brand_country,
+
+            c.model,
+            c.trim,
+            c.display_title,
+
+            c.car_code,
+            c.slug,
+
+            c.year,
+
+            c.condition,
+            c.status,
+
+            c.engine_type,
+            c.engine_volume,
+            c.cylinders,
+            c.horsepower,
+
+            c.gearbox,
+            c.drive_type,
+            c.fuel,
+
+            c.mileage,
+            c.color,
+
+            c.price,
+            c.old_price,
+
+            c.currency,
+            c.price_status,
+
+            c.description,
+
+            c.main_image,
+            c.background_image,
+
+            c.manufacturer_url,
+
+            c.meta_title,
+            c.meta_description,
+            c.meta_image,
+
+            c.is_active,
+            c.published_at
+
+        FROM cars c
+
+        INNER JOIN brands b
+            ON b.id = c.brand_id
+
+        WHERE
+
+            c.slug = ?
+
+            AND c.is_active = 1
+
+        LIMIT 1
+
+    `;
+
+    const car =
+        await this.findOne(
+            carSql,
+            [normalizedSlug]
+        );
+
+    /*==========================================
+        PRODUCT NOT FOUND
+    ==========================================*/
+
+    if (!car) {
+
+        return null;
+
+    }
+
+    /*==========================================
+        PRODUCT GALLERY
+
+        IMPORTANT:
+
+        Gallery is a separate media domain.
+
+        Only persisted car_gallery records
+        are publicly visible.
+
+        Temporary upload assets are never
+        exposed by this query.
+    ==========================================*/
+
+    const gallerySql = `
+
+        SELECT
+
+            id,
+
+            image_path,
+
+            sort_order
+
+        FROM car_gallery
+
+        WHERE
+
+            car_id = ?
+
+        ORDER BY
+
+            sort_order ASC,
+            id ASC
+
+    `;
+
+    const gallery =
+        await this.findAll(
+            gallerySql,
+            [car.id]
+        );
+
+    /*==========================================
+        PUBLIC PRODUCT RESPONSE
+    ==========================================*/
+
+    return {
+
+        ...car,
+
+        gallery
+
+    };
+
+}
+
+/*==============================================
+    GET ADMIN DETAILS
+
+    ADMIN PANEL EDIT PAGE
+
+    Includes:
+
+    - Car Information
+    - Brand Information
+    - Gallery
+    - Display Locations
+
+    IMPORTANT:
+
+    This method is intentionally separate
+    from getProductBySlug().
+==============================================*/
+
+static async getAdminDetails(id) {
+
+    const carSql = `
+
+        SELECT
+
+            c.*,
+
+            b.name AS brand_name,
+            b.slug AS brand_slug,
+            b.logo AS brand_logo,
+            b.country AS brand_country
+
+        FROM cars c
+
+        INNER JOIN brands b
+            ON b.id = c.brand_id
+
+        WHERE
+
+            c.id = ?
+
+        LIMIT 1
+
+    `;
+
+    const car =
+        await this.findOne(
+            carSql,
+            [id]
+        );
+
+    if (!car) {
+
+        return null;
+
+    }
+
+    /*==========================================
+        GALLERY
+    ==========================================*/
+
+    const gallerySql = `
+
+        SELECT
+
+            id,
+            image_path,
+            sort_order
+
+        FROM car_gallery
+
+        WHERE
+
+            car_id = ?
+
+        ORDER BY
+
+            sort_order ASC,
+            id ASC
+
+    `;
+
+    const gallery =
+        await this.findAll(
+            gallerySql,
+            [id]
+        );
+
+    /*==========================================
+        DISPLAY LOCATIONS
+    ==========================================*/
+
+    const locationsSql = `
+
+        SELECT
+
+            cdl.id,
+            cdl.sort_order,
+
+            ss.id AS section_id,
+            ss.name AS section_name,
+            ss.slug AS section_slug
+
+        FROM car_display_locations cdl
+
+        INNER JOIN site_sections ss
+            ON ss.id = cdl.section_id
+
+        WHERE
+
+            cdl.car_id = ?
+
+        ORDER BY
+
+            cdl.sort_order ASC
+
+    `;
+
+    const locations =
+        await this.findAll(
+            locationsSql,
+            [id]
+        );
+
+    /*==========================================
+        ADMIN RESPONSE
+    ==========================================*/
+
+    return {
+
+        car,
+
+        gallery,
+
+        locations
+
+    };
+
+}
+
+}
+
+module.exports = CarPublic;
