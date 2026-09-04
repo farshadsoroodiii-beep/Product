@@ -1,0 +1,2007 @@
+frontend\js\front-js-fetch\product-fetch.js
+/*==================================================
+PRODUCT FETCH
+
+Vehicle Business Management System
+
+Responsibilities:
+- Read Product slug from URL
+- Request public Product API
+- Validate public API response
+- Map Product data
+- Build public image URLs
+- Render Product fields
+- Render Main Image
+- Render Gallery
+- Render Background Image
+- Manage Lightbox
+- Manage Product actions
+- Manage Loading / Error states
+- Update Product SEO metadata
+
+Public API:
+GET /api/cars/:slug
+
+Expected response:
+{
+    success: true,
+    data: {
+        ...
+    }
+}
+
+Does NOT:
+- Edit data
+- Use Admin API
+- Persist Product changes
+- Manage Admin state
+
+==================================================*/
+
+(() => {
+
+'use strict';
+
+/*==================================================
+    CONFIGURATION
+==================================================*/
+
+const CONFIG = window.FRONTEND_CONFIG;
+
+if (!CONFIG) {
+    console.error(
+        'PRODUCT: FRONTEND_CONFIG is not available.'
+    );
+
+    return;
+}
+
+const API_BASE =
+    CONFIG.API.BASE_API;
+
+const UPLOADS_URL =
+    CONFIG.API.UPLOADS_URL;
+
+const REQUEST_TIMEOUT =
+    CONFIG.REQUEST?.TIMEOUT || 15000;
+
+/*==================================================
+    DOM
+==================================================*/
+
+const page =
+    document.querySelector(
+        '#product-page[data-product-page="true"]'
+    );
+
+if (!page) {
+    console.error(
+        'PRODUCT: Product page container not found.'
+    );
+
+    return;
+}
+
+const elements = {
+
+    pageTitle:
+        document.querySelector(
+            '#product-page-title'
+        ),
+
+    metaDescription:
+        document.querySelector(
+            '#product-meta-description'
+        ),
+
+    metaKeywords:
+        document.querySelector(
+            '#product-meta-keywords'
+        ),
+
+    ogTitle:
+        document.querySelector(
+            '#product-og-title'
+        ),
+
+    ogDescription:
+        document.querySelector(
+            '#product-og-description'
+        ),
+
+    ogImage:
+        document.querySelector(
+            '#product-og-image'
+        ),
+
+    /*----------------------------------------------
+        Product Header
+    ----------------------------------------------*/
+
+    brandLogo:
+        document.querySelector(
+            '#product-brand-logo'
+        ),
+
+    brandName:
+        document.querySelector(
+            '#product-brand-name'
+        ),
+
+    displayTitle:
+        document.querySelector(
+            '#product-display-title'
+        ),
+
+    model:
+        document.querySelector(
+            '#product-model'
+        ),
+
+    trim:
+        document.querySelector(
+            '#product-trim'
+        ),
+
+    /*----------------------------------------------
+        Media
+    ----------------------------------------------*/
+
+    mainImage:
+        document.querySelector(
+            '#ci-main-img'
+        ),
+
+    thumbs:
+        document.querySelector(
+            '#ci-thumbs'
+        ),
+
+    backgroundMedia:
+        document.querySelector(
+            '#ci-background-media'
+        ),
+
+    backgroundImage:
+        document.querySelector(
+            '#ci-background-img'
+        ),
+
+    mediaLoading:
+        document.querySelector(
+            '#ci-media-loading'
+        ),
+
+    /*----------------------------------------------
+        Basic Information
+    ----------------------------------------------*/
+
+    brand:
+        document.querySelector(
+            '#product-brand'
+        ),
+
+    modelInfo:
+        document.querySelector(
+            '#product-model-info'
+        ),
+
+    trimInfo:
+        document.querySelector(
+            '#product-trim-info'
+        ),
+
+    titleInfo:
+        document.querySelector(
+            '#product-title-info'
+        ),
+
+    carCode:
+        document.querySelector(
+            '#product-car-code'
+        ),
+
+    year:
+        document.querySelector(
+            '#product-year'
+        ),
+
+    condition:
+        document.querySelector(
+            '#product-condition'
+        ),
+
+    status:
+        document.querySelector(
+            '#product-status'
+        ),
+
+    /*----------------------------------------------
+        Technical Information
+    ----------------------------------------------*/
+
+    engineType:
+        document.querySelector(
+            '#product-engine-type'
+        ),
+
+    engineVolume:
+        document.querySelector(
+            '#product-engine-volume'
+        ),
+
+    cylinders:
+        document.querySelector(
+            '#product-cylinders'
+        ),
+
+    horsepower:
+        document.querySelector(
+            '#product-horsepower'
+        ),
+
+    gearbox:
+        document.querySelector(
+            '#product-gearbox'
+        ),
+
+    driveType:
+        document.querySelector(
+            '#product-drive-type'
+        ),
+
+    fuel:
+        document.querySelector(
+            '#product-fuel'
+        ),
+
+    mileage:
+        document.querySelector(
+            '#product-mileage'
+        ),
+
+    color:
+        document.querySelector(
+            '#product-color'
+        ),
+
+    /*----------------------------------------------
+        Commercial Information
+    ----------------------------------------------*/
+
+    price:
+        document.querySelector(
+            '#product-price'
+        ),
+
+    oldPrice:
+        document.querySelector(
+            '#product-old-price'
+        ),
+
+    currency:
+        document.querySelector(
+            '#product-currency'
+        ),
+
+    priceStatus:
+        document.querySelector(
+            '#product-price-status'
+        ),
+
+    /*----------------------------------------------
+        Description
+    ----------------------------------------------*/
+
+    description:
+        document.querySelector(
+            '#product-description'
+        ),
+
+    /*----------------------------------------------
+        Manufacturer
+    ----------------------------------------------*/
+
+    manufacturerSection:
+        document.querySelector(
+            '#product-manufacturer-section'
+        ),
+
+    manufacturerLink:
+        document.querySelector(
+            '#product-manufacturer-link'
+        ),
+
+    /*----------------------------------------------
+        Actions
+    ----------------------------------------------*/
+
+    orderButton:
+        document.querySelector(
+            '#product-order-btn'
+        ),
+
+    backButton:
+        document.querySelector(
+            '#product-back-btn'
+        ),
+
+    /*----------------------------------------------
+        Error
+    ----------------------------------------------*/
+
+    error:
+        document.querySelector(
+            '#product-error'
+        ),
+
+    errorMessage:
+        document.querySelector(
+            '#product-error-message'
+        ),
+
+    /*----------------------------------------------
+        Lightbox
+    ----------------------------------------------*/
+
+    lightbox:
+        document.querySelector(
+            '#ci-lightbox'
+        ),
+
+    lightboxImage:
+        document.querySelector(
+            '#ci-lightbox-img'
+        ),
+
+    lightboxClose:
+        document.querySelector(
+            '#ci-lightbox-close'
+        ),
+
+    lightboxPrev:
+        document.querySelector(
+            '#ci-lightbox-prev'
+        ),
+
+    lightboxNext:
+        document.querySelector(
+            '#ci-lightbox-next'
+        )
+};
+
+/*==================================================
+    STATE
+==================================================*/
+
+let currentCar = null;
+
+let galleryImages = [];
+
+let currentImageIndex = 0;
+
+let eventsBound = false;
+
+/*==================================================
+    HELPERS
+==================================================*/
+
+function normalizeText(value) {
+
+    if (
+        value === null ||
+        value === undefined
+    ) {
+        return '';
+    }
+
+    return String(value).trim();
+}
+
+function displayValue(value) {
+
+    const normalized =
+        normalizeText(value);
+
+    return normalized || '-';
+}
+
+function formatNumber(value) {
+
+    if (
+        value === null ||
+        value === undefined ||
+        value === ''
+    ) {
+        return '';
+    }
+
+    const number =
+        Number(value);
+
+    if (!Number.isFinite(number)) {
+        return normalizeText(value);
+    }
+
+    return new Intl.NumberFormat(
+        'fa-IR'
+    ).format(number);
+}
+
+function buildImageUrl(imagePath) {
+
+    const value =
+        normalizeText(imagePath);
+
+    if (!value) {
+        return '';
+    }
+
+    /*----------------------------------------------
+        Full URL
+    ----------------------------------------------*/
+
+    if (
+        value.startsWith('http://') ||
+        value.startsWith('https://')
+    ) {
+        return value;
+    }
+
+    /*
+        Protocol-relative URL
+    */
+
+    if (value.startsWith('//')) {
+        return `${window.location.protocol}${value}`;
+    }
+
+    /*
+        Windows path compatibility
+    */
+
+    let normalized =
+        value.replace(/\\/g, '/');
+
+    /*
+        Already contains uploads root
+    */
+
+    if (
+        normalized.startsWith('/uploads/')
+    ) {
+        return `${CONFIG.API.BASE_URL}${normalized}`;
+    }
+
+    if (
+        normalized.startsWith('uploads/')
+    ) {
+        return `${CONFIG.API.BASE_URL}/${normalized}`;
+    }
+
+    /*
+        Leading slash
+    */
+
+    normalized =
+        normalized.replace(/^\/+/, '');
+
+    /*
+        Canonical DB path:
+        cars/133/main-images/...
+    */
+
+    const uploadsBase =
+        UPLOADS_URL.replace(/\/+$/, '');
+
+    return `${uploadsBase}/${normalized}`;
+}
+
+function getSlugFromUrl() {
+
+    const params =
+        new URLSearchParams(
+            window.location.search
+        );
+
+    return normalizeText(
+        params.get('slug')
+    );
+}
+
+/*==================================================
+    REQUEST
+==================================================*/
+
+async function fetchWithTimeout(
+    url,
+    timeout = REQUEST_TIMEOUT
+) {
+
+    const controller =
+        new AbortController();
+
+    const timer =
+        setTimeout(
+            () => controller.abort(),
+            timeout
+        );
+
+    try {
+
+        const response =
+            await fetch(
+                url,
+                {
+                    method: 'GET',
+                    headers: {
+                        'Accept':
+                            'application/json'
+                    },
+                    signal:
+                        controller.signal
+                }
+            );
+
+        return response;
+
+    } finally {
+
+        clearTimeout(timer);
+    }
+}
+
+async function fetchProduct(slug) {
+
+    const url =
+        `${API_BASE}/cars/${encodeURIComponent(slug)}`;
+
+    if (
+        CONFIG.DEBUG?.LOG_REQUESTS
+    ) {
+        console.log(
+            'PRODUCT REQUEST:',
+            url
+        );
+    }
+
+    const response =
+        await fetchWithTimeout(url);
+
+    if (!response.ok) {
+
+        if (
+            response.status === 404
+        ) {
+            throw new Error(
+                'PRODUCT_NOT_FOUND'
+            );
+        }
+
+        throw new Error(
+            `PRODUCT_API_ERROR_${response.status}`
+        );
+    }
+
+    const result =
+        await response.json();
+
+    if (
+        CONFIG.DEBUG?.LOG_RESPONSES
+    ) {
+        console.log(
+            'PRODUCT RESPONSE:',
+            result
+        );
+    }
+
+    if (
+        !result ||
+        result.success !== true
+    ) {
+        throw new Error(
+            'PRODUCT_INVALID_RESPONSE'
+        );
+    }
+
+    if (!result.data) {
+        throw new Error(
+            'PRODUCT_EMPTY_DATA'
+        );
+    }
+
+    return result.data;
+}
+
+/*==================================================
+    DATA MAPPER
+==================================================*/
+
+function mapProduct(data) {
+
+    const rawGallery =
+        Array.isArray(data.gallery)
+            ? data.gallery
+            : [];
+
+    const gallery =
+        rawGallery
+            .map((item, index) => {
+
+                if (
+                    typeof item === 'string'
+                ) {
+                    return {
+                        id: null,
+                        imagePath: item,
+                        sortOrder: index + 1
+                    };
+                }
+
+                return {
+                    id:
+                        item?.id ?? null,
+
+                    imagePath:
+                        item?.image_path ||
+                        item?.imagePath ||
+                        item?.path ||
+                        '',
+
+                    sortOrder:
+                        Number.isFinite(
+                            Number(
+                                item?.sort_order
+                            )
+                        )
+                            ? Number(
+                                item.sort_order
+                            )
+                            : index + 1
+                };
+
+            })
+            .filter(
+                item => item.imagePath
+            )
+            .sort(
+                (a, b) =>
+                    a.sortOrder -
+                    b.sortOrder
+            )
+            .map(
+                item => ({
+                    ...item,
+                    url:
+                        buildImageUrl(
+                            item.imagePath
+                        )
+                })
+            )
+            .filter(
+                item => item.url
+            );
+
+    return {
+
+        id:
+            data.id ?? null,
+
+        brandId:
+            data.brand_id ?? null,
+
+        brandName:
+            data.brand_name || '',
+
+        brandSlug:
+            data.brand_slug || '',
+
+        brandLogo:
+            data.brand_logo || '',
+
+        brandCountry:
+            data.brand_country || '',
+
+        model:
+            data.model || '',
+
+        trim:
+            data.trim || '',
+
+        displayTitle:
+            data.display_title ||
+            data.title ||
+            '',
+
+        carCode:
+            data.car_code || '',
+
+        slug:
+            data.slug || '',
+
+        condition:
+            data.condition || '',
+
+        status:
+            data.status || '',
+
+        year:
+            data.year ?? '',
+
+        engineType:
+            data.engine_type || '',
+
+        engineVolume:
+            data.engine_volume ?? '',
+
+        cylinders:
+            data.cylinders ?? '',
+
+        horsepower:
+            data.horsepower ?? '',
+
+        gearbox:
+            data.gearbox || '',
+
+        driveType:
+            data.drive_type || '',
+
+        fuel:
+            data.fuel || '',
+
+        mileage:
+            data.mileage ?? '',
+
+        color:
+            data.color || '',
+
+        price:
+            data.price ?? '',
+
+        oldPrice:
+            data.old_price ?? '',
+
+        currency:
+            data.currency || '',
+
+        priceStatus:
+            data.price_status || '',
+
+        description:
+            data.description || '',
+
+        mainImage:
+            buildImageUrl(
+                data.main_image
+            ),
+
+        backgroundImage:
+            buildImageUrl(
+                data.background_image
+            ),
+
+        manufacturerUrl:
+            data.manufacturer_url || '',
+
+        isActive:
+            data.is_active,
+
+        publishedAt:
+            data.published_at || '',
+
+        metaTitle:
+            data.meta_title || '',
+
+        metaDescription:
+            data.meta_description || '',
+
+        metaImage:
+            buildImageUrl(
+                data.meta_image
+            ),
+
+        gallery
+    };
+}
+
+/*==================================================
+    LOADING STATE
+==================================================*/
+
+function setLoading(isLoading) {
+
+    if (!elements.mediaLoading) {
+        return;
+    }
+
+    elements.mediaLoading.hidden =
+        !isLoading;
+
+    elements.mediaLoading.setAttribute(
+        'aria-hidden',
+        String(!isLoading)
+    );
+}
+
+/*==================================================
+    ERROR STATE
+==================================================*/
+
+function hideError() {
+
+    if (!elements.error) {
+        return;
+    }
+
+    elements.error.hidden = true;
+}
+
+function showError(message) {
+
+    if (elements.errorMessage) {
+
+        elements.errorMessage.textContent =
+            message;
+    }
+
+    if (elements.error) {
+        elements.error.hidden = false;
+    }
+}
+
+/*==================================================
+    TEXT RENDERING
+==================================================*/
+
+function setText(element, value) {
+
+    if (!element) {
+        return;
+    }
+
+    element.textContent =
+        displayValue(value);
+}
+
+function renderBasicInformation(car) {
+
+    setText(
+        elements.brand,
+        car.brandName
+    );
+
+    setText(
+        elements.modelInfo,
+        car.model
+    );
+
+    setText(
+        elements.trimInfo,
+        car.trim
+    );
+
+    setText(
+        elements.titleInfo,
+        car.displayTitle
+    );
+
+    setText(
+        elements.carCode,
+        car.carCode
+    );
+
+    setText(
+        elements.year,
+        car.year
+    );
+
+    setText(
+        elements.condition,
+        car.condition
+    );
+
+    setText(
+        elements.status,
+        car.status
+    );
+}
+
+function renderTechnicalInformation(car) {
+
+    setText(
+        elements.engineType,
+        car.engineType
+    );
+
+    setText(
+        elements.engineVolume,
+        car.engineVolume
+    );
+
+    setText(
+        elements.cylinders,
+        car.cylinders
+    );
+
+    setText(
+        elements.horsepower,
+        car.horsepower
+    );
+
+    setText(
+        elements.gearbox,
+        car.gearbox
+    );
+
+    setText(
+        elements.driveType,
+        car.driveType
+    );
+
+    setText(
+        elements.fuel,
+        car.fuel
+    );
+
+    setText(
+        elements.mileage,
+        car.mileage
+    );
+
+    setText(
+        elements.color,
+        car.color
+    );
+}
+
+function renderCommercialInformation(car) {
+
+    setText(
+        elements.price,
+        car.price !== ''
+            ? formatNumber(car.price)
+            : ''
+    );
+
+    setText(
+        elements.oldPrice,
+        car.oldPrice !== ''
+            ? formatNumber(car.oldPrice)
+            : ''
+    );
+
+    setText(
+        elements.currency,
+        car.currency
+    );
+
+    setText(
+        elements.priceStatus,
+        car.priceStatus
+    );
+}
+
+function renderDescription(car) {
+
+    if (!elements.description) {
+        return;
+    }
+
+    elements.description.textContent =
+        car.description || '-';
+}
+
+/*==================================================
+    HEADER
+==================================================*/
+
+function renderHeader(car) {
+
+    setText(
+        elements.brandName,
+        car.brandName
+    );
+
+    setText(
+        elements.displayTitle,
+        car.displayTitle
+    );
+
+    setText(
+        elements.model,
+        car.model
+    );
+
+    setText(
+        elements.trim,
+        car.trim
+    );
+
+    if (
+        elements.brandLogo &&
+        car.brandLogo
+    ) {
+
+        const logoUrl =
+            buildImageUrl(
+                car.brandLogo
+            );
+
+        if (logoUrl) {
+
+            elements.brandLogo.src =
+                logoUrl;
+
+            elements.brandLogo.alt =
+                car.brandName ||
+                'Brand';
+
+            elements.brandLogo.hidden =
+                false;
+        }
+    }
+}
+
+/*==================================================
+    MANUFACTURER
+==================================================*/
+
+function renderManufacturer(car) {
+
+    if (
+        !elements.manufacturerSection ||
+        !elements.manufacturerLink
+    ) {
+        return;
+    }
+
+    const url =
+        normalizeText(
+            car.manufacturerUrl
+        );
+
+    if (!url) {
+
+        elements.manufacturerSection.hidden =
+            true;
+
+        elements.manufacturerLink.removeAttribute(
+            'href'
+        );
+
+        return;
+    }
+
+    elements.manufacturerLink.href =
+        url;
+
+    elements.manufacturerLink.target =
+        '_blank';
+
+    elements.manufacturerLink.rel =
+        'noopener noreferrer';
+
+    elements.manufacturerSection.hidden =
+        false;
+}
+
+/*==================================================
+    MAIN IMAGE
+==================================================*/
+
+function renderMainImage(car) {
+
+    if (!elements.mainImage) {
+        return;
+    }
+
+    const mainImage =
+        car.mainImage;
+
+    if (!mainImage) {
+
+        elements.mainImage.removeAttribute(
+            'src'
+        );
+
+        elements.mainImage.alt =
+            'تصویری موجود نیست';
+
+        return;
+    }
+
+    elements.mainImage.src =
+        mainImage;
+
+    elements.mainImage.alt =
+        car.displayTitle ||
+        car.model ||
+        'Vehicle';
+}
+
+/*==================================================
+    BACKGROUND IMAGE
+==================================================*/
+
+function renderBackgroundImage(car) {
+
+    if (
+        !elements.backgroundMedia ||
+        !elements.backgroundImage
+    ) {
+        return;
+    }
+
+    if (!car.backgroundImage) {
+
+        elements.backgroundMedia.hidden =
+            true;
+
+        elements.backgroundImage.removeAttribute(
+            'src'
+        );
+
+        return;
+    }
+
+    elements.backgroundImage.src =
+        car.backgroundImage;
+
+    elements.backgroundImage.alt =
+        car.displayTitle
+            ? `${car.displayTitle} - Background`
+            : 'Vehicle Background';
+
+    elements.backgroundMedia.hidden =
+        false;
+}
+
+/*==================================================
+    GALLERY
+==================================================*/
+
+function renderGallery(car) {
+
+    if (!elements.thumbs) {
+        return;
+    }
+
+    galleryImages = [];
+
+    /*
+        Main Image is the first visual image.
+        Gallery images follow in their persisted
+        sort_order.
+    */
+
+    if (car.mainImage) {
+
+        galleryImages.push({
+            url: car.mainImage,
+            type: 'main',
+            id: null,
+            sortOrder: 0
+        });
+    }
+
+    car.gallery.forEach(
+        image => {
+
+            /*
+                Prevent duplicate main image
+                when the same physical path
+                also exists in gallery.
+            */
+
+            if (
+                car.mainImage &&
+                image.url === car.mainImage
+            ) {
+                return;
+            }
+
+            galleryImages.push({
+                url: image.url,
+                type: 'gallery',
+                id: image.id,
+                sortOrder: image.sortOrder
+            });
+        }
+    );
+
+    elements.thumbs.innerHTML = '';
+
+    if (!galleryImages.length) {
+
+        currentImageIndex = 0;
+
+        if (elements.mainImage) {
+
+            elements.mainImage.removeAttribute(
+                'src'
+            );
+
+            elements.mainImage.alt =
+                'تصویری موجود نیست';
+        }
+
+        updateLightboxButtons();
+
+        return;
+    }
+
+    currentImageIndex = 0;
+
+    galleryImages.forEach(
+        (image, index) => {
+
+            const thumb =
+                document.createElement(
+                    'img'
+                );
+
+            thumb.src =
+                image.url;
+
+            thumb.alt =
+                `${car.displayTitle || car.model || 'Vehicle'} - ${index + 1}`;
+
+            thumb.dataset.index =
+                String(index);
+
+            thumb.tabIndex = 0;
+
+            if (index === 0) {
+                thumb.classList.add(
+                    'ci-selected'
+                );
+            }
+
+            elements.thumbs.appendChild(
+                thumb
+            );
+        }
+    );
+
+    updateMainImage(
+        0,
+        false
+    );
+}
+
+/*==================================================
+    MAIN IMAGE UPDATE
+==================================================*/
+
+function updateMainImage(
+    index,
+    smooth = true
+) {
+
+    if (
+        !galleryImages.length ||
+        !elements.mainImage
+    ) {
+        return;
+    }
+
+    if (
+        index < 0 ||
+        index >= galleryImages.length
+    ) {
+        return;
+    }
+
+    currentImageIndex =
+        index;
+
+    const image =
+        galleryImages[
+            currentImageIndex
+        ];
+
+    elements.mainImage.src =
+        image.url;
+
+    elements.thumbs
+        ?.querySelectorAll('img')
+        .forEach(
+            thumb => {
+
+                thumb.classList.remove(
+                    'ci-selected'
+                );
+            }
+        );
+
+    const selectedThumb =
+        elements.thumbs?.querySelector(
+            `img[data-index="${currentImageIndex}"]`
+        );
+
+    if (selectedThumb) {
+
+        selectedThumb.classList.add(
+            'ci-selected'
+        );
+
+        if (smooth) {
+
+            selectedThumb.scrollIntoView({
+                behavior: 'smooth',
+                block: 'nearest',
+                inline: 'center'
+            });
+
+        }
+    }
+
+    updateLightboxButtons();
+
+    if (
+        elements.lightbox &&
+        elements.lightbox.classList.contains(
+            'ci-active'
+        )
+    ) {
+        updateLightboxImage();
+    }
+}
+
+/*==================================================
+    LIGHTBOX
+==================================================*/
+
+function openLightbox() {
+
+    if (
+        !elements.lightbox ||
+        !galleryImages.length
+    ) {
+        return;
+    }
+
+    elements.lightbox.classList.add(
+        'ci-active'
+    );
+
+    elements.lightbox.setAttribute(
+        'aria-hidden',
+        'false'
+    );
+
+    updateLightboxImage();
+
+    document.body.style.overflow =
+        'hidden';
+}
+
+function closeLightbox() {
+
+    if (!elements.lightbox) {
+        return;
+    }
+
+    elements.lightbox.classList.remove(
+        'ci-active'
+    );
+
+    elements.lightbox.setAttribute(
+        'aria-hidden',
+        'true'
+    );
+
+    document.body.style.overflow =
+        '';
+}
+
+function updateLightboxImage() {
+
+    if (
+        !elements.lightboxImage ||
+        !galleryImages.length
+    ) {
+        return;
+    }
+
+    const image =
+        galleryImages[
+            currentImageIndex
+        ];
+
+    if (!image) {
+        return;
+    }
+
+    elements.lightboxImage.src =
+        image.url;
+
+    elements.lightboxImage.alt =
+        `Vehicle image ${currentImageIndex + 1}`;
+}
+
+function updateLightboxButtons() {
+
+    const hasImages =
+        galleryImages.length > 0;
+
+    if (elements.lightboxPrev) {
+
+        elements.lightboxPrev.disabled =
+            !hasImages ||
+            currentImageIndex <= 0;
+    }
+
+    if (elements.lightboxNext) {
+
+        elements.lightboxNext.disabled =
+            !hasImages ||
+            currentImageIndex >=
+            galleryImages.length - 1;
+    }
+}
+
+function showPreviousImage() {
+
+    if (
+        currentImageIndex <= 0
+    ) {
+        return;
+    }
+
+    updateMainImage(
+        currentImageIndex - 1
+    );
+}
+
+function showNextImage() {
+
+    if (
+        currentImageIndex >=
+        galleryImages.length - 1
+    ) {
+        return;
+    }
+
+    updateMainImage(
+        currentImageIndex + 1
+    );
+}
+
+/*==================================================
+    SEO
+==================================================*/
+
+function renderSEO(car) {
+
+    const title =
+        car.metaTitle ||
+        car.displayTitle ||
+        car.model ||
+        'Vehicle';
+
+    const description =
+        car.metaDescription ||
+        car.description ||
+        '';
+
+    if (elements.pageTitle) {
+
+        elements.pageTitle.textContent =
+            title;
+    }
+
+    if (
+        elements.metaDescription
+    ) {
+
+        elements.metaDescription.setAttribute(
+            'content',
+            description
+        );
+    }
+
+    if (
+        elements.metaKeywords
+    ) {
+
+        const keywords = [
+            car.brandName,
+            car.model,
+            car.trim,
+            car.condition
+        ]
+            .filter(Boolean)
+            .join(', ');
+
+        elements.metaKeywords.setAttribute(
+            'content',
+            keywords
+        );
+    }
+
+    if (elements.ogTitle) {
+
+        elements.ogTitle.setAttribute(
+            'content',
+            title
+        );
+    }
+
+    if (elements.ogDescription) {
+
+        elements.ogDescription.setAttribute(
+            'content',
+            description
+        );
+    }
+
+    if (
+        elements.ogImage &&
+        car.metaImage
+    ) {
+
+        elements.ogImage.setAttribute(
+            'content',
+            car.metaImage
+        );
+    }
+}
+
+/*==================================================
+    ORDER INTEGRATION
+==================================================*/
+
+function prepareOrderData() {
+
+    if (!currentCar) {
+        return null;
+    }
+
+    return {
+
+        id:
+            currentCar.id,
+
+        brand_id:
+            currentCar.brandId,
+
+        brand_name:
+            currentCar.brandName,
+
+        model:
+            currentCar.model,
+
+        trim:
+            currentCar.trim,
+
+        display_title:
+            currentCar.displayTitle,
+
+        car_code:
+            currentCar.carCode,
+
+        slug:
+            currentCar.slug,
+
+        year:
+            currentCar.year,
+
+        condition:
+            currentCar.condition,
+
+        status:
+            currentCar.status,
+
+        engine_type:
+            currentCar.engineType,
+
+        engine_volume:
+            currentCar.engineVolume,
+
+        cylinders:
+            currentCar.cylinders,
+
+        horsepower:
+            currentCar.horsepower,
+
+        gearbox:
+            currentCar.gearbox,
+
+        drive_type:
+            currentCar.driveType,
+
+        fuel:
+            currentCar.fuel,
+
+        mileage:
+            currentCar.mileage,
+
+        color:
+            currentCar.color,
+
+        price:
+            currentCar.price,
+
+        old_price:
+            currentCar.oldPrice,
+
+        currency:
+            currentCar.currency,
+
+        price_status:
+            currentCar.priceStatus,
+
+        main_image:
+            currentCar.mainImage,
+
+        background_image:
+            currentCar.backgroundImage
+    };
+}
+
+function handleOrder() {
+
+    if (!currentCar) {
+        return;
+    }
+
+    const orderData =
+        prepareOrderData();
+
+    if (!orderData) {
+        return;
+    }
+
+    try {
+
+        localStorage.setItem(
+            'selectedCar',
+            JSON.stringify(
+                orderData
+            )
+        );
+
+    } catch (error) {
+
+        console.error(
+            'PRODUCT: Unable to store selected car.',
+            error
+        );
+
+        return;
+    }
+
+    window.location.href =
+        'order.html';
+}
+
+/*==================================================
+    EVENT BINDING
+==================================================*/
+
+function bindEvents() {
+
+    if (eventsBound) {
+        return;
+    }
+
+    eventsBound = true;
+
+    /*----------------------------------------------
+        Gallery
+    ----------------------------------------------*/
+
+    elements.thumbs?.addEventListener(
+        'click',
+        event => {
+
+            const target =
+                event.target;
+
+            if (
+                !target ||
+                target.tagName !== 'IMG'
+            ) {
+                return;
+            }
+
+            const index =
+                Number(
+                    target.dataset.index
+                );
+
+            if (
+                Number.isInteger(index)
+            ) {
+
+                updateMainImage(
+                    index
+                );
+            }
+        }
+    );
+
+    elements.thumbs?.addEventListener(
+        'keydown',
+        event => {
+
+            const target =
+                event.target;
+
+            if (
+                !target ||
+                target.tagName !== 'IMG'
+            ) {
+                return;
+            }
+
+            if (
+                event.key !== 'Enter' &&
+                event.key !== ' '
+            ) {
+                return;
+            }
+
+            event.preventDefault();
+
+            const index =
+                Number(
+                    target.dataset.index
+                );
+
+            if (
+                Number.isInteger(index)
+            ) {
+
+                updateMainImage(
+                    index
+                );
+            }
+        }
+    );
+
+    /*----------------------------------------------
+        Main Image
+    ----------------------------------------------*/
+
+    elements.mainImage?.addEventListener(
+        'click',
+        openLightbox
+    );
+
+    /*----------------------------------------------
+        Lightbox
+    ----------------------------------------------*/
+
+    elements.lightboxClose?.addEventListener(
+        'click',
+        closeLightbox
+    );
+
+    elements.lightbox?.addEventListener(
+        'click',
+        event => {
+
+            if (
+                event.target ===
+                elements.lightbox
+            ) {
+                closeLightbox();
+            }
+        }
+    );
+
+    elements.lightboxPrev?.addEventListener(
+        'click',
+        showPreviousImage
+    );
+
+    elements.lightboxNext?.addEventListener(
+        'click',
+        showNextImage
+    );
+
+    document.addEventListener(
+        'keydown',
+        event => {
+
+            if (
+                !elements.lightbox ||
+                !elements.lightbox.classList.contains(
+                    'ci-active'
+                )
+            ) {
+                return;
+            }
+
+            if (
+                event.key === 'Escape'
+            ) {
+
+                closeLightbox();
+
+                return;
+            }
+
+            if (
+                event.key === 'ArrowLeft'
+            ) {
+
+                showNextImage();
+
+                return;
+            }
+
+            if (
+                event.key === 'ArrowRight'
+            ) {
+
+                showPreviousImage();
+            }
+        }
+    );
+
+    /*----------------------------------------------
+        Order
+    ----------------------------------------------*/
+
+    elements.orderButton?.addEventListener(
+        'click',
+        event => {
+
+            event.preventDefault();
+
+            handleOrder();
+        }
+    );
+
+    /*----------------------------------------------
+        Back
+    ----------------------------------------------*/
+
+    elements.backButton?.addEventListener(
+        'click',
+        event => {
+
+            event.preventDefault();
+
+            if (
+                window.history.length > 1
+            ) {
+
+                window.history.back();
+
+            } else {
+
+                window.location.href =
+                    'index.html';
+            }
+        }
+    );
+}
+
+/*==================================================
+    RENDER PRODUCT
+==================================================*/
+
+function renderProduct(data) {
+
+    const car =
+        mapProduct(data);
+
+    currentCar =
+        car;
+
+    renderHeader(car);
+
+    renderBasicInformation(car);
+
+    renderTechnicalInformation(car);
+
+    renderCommercialInformation(car);
+
+    renderDescription(car);
+
+    renderManufacturer(car);
+
+    renderMainImage(car);
+
+    renderGallery(car);
+
+    renderBackgroundImage(car);
+
+    renderSEO(car);
+
+    page.dataset.productSlug =
+        car.slug || '';
+
+    page.dataset.productId =
+        car.id || '';
+
+    hideError();
+}
+
+/*==================================================
+    LOAD PRODUCT
+==================================================*/
+
+async function loadProduct() {
+
+    setLoading(true);
+
+    hideError();
+
+    const slug =
+        getSlugFromUrl();
+
+    if (!slug) {
+
+        setLoading(false);
+
+        showError(
+            'شناسه خودرو در آدرس صفحه مشخص نشده است.'
+        );
+
+        return;
+    }
+
+    try {
+
+        const data =
+            await fetchProduct(slug);
+
+        renderProduct(data);
+
+    } catch (error) {
+
+        console.error(
+            'PRODUCT LOAD ERROR:',
+            error
+        );
+
+        if (
+            error?.name ===
+            'AbortError'
+        ) {
+
+            showError(
+                'زمان دریافت اطلاعات خودرو به پایان رسید. لطفاً دوباره تلاش کنید.'
+            );
+
+        } else if (
+            error?.message ===
+            'PRODUCT_NOT_FOUND'
+        ) {
+
+            showError(
+                'خودروی مورد نظر پیدا نشد یا در حال حاضر برای نمایش عمومی فعال نیست.'
+            );
+
+        } else {
+
+            showError(
+                'خطا در دریافت اطلاعات خودرو. لطفاً دوباره تلاش کنید.'
+            );
+        }
+
+    } finally {
+
+        setLoading(false);
+    }
+}
+
+/*==================================================
+    INITIALIZE
+==================================================*/
+
+function init() {
+
+    bindEvents();
+
+    loadProduct();
+}
+
+init();
+
+})();
